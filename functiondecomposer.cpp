@@ -41,7 +41,7 @@ public:
                 userType = userType.getNonReferenceType().getUnqualifiedType();
                 llvm::outs() << "\t(type = " << userType.getAsString() << ", name = " << currentParam->getNameAsString() << ")\n";
             }
-            llvm::outs() << "\n\n";
+            llvm::outs() << "\n";
         }
         return true;
     }
@@ -76,7 +76,7 @@ struct FunctionDecomposerDiagnosticConsumer : clang::DiagnosticConsumer {
             llvm::outs() << "Unknown type detected: " << Info.getArgIdentifier(0)->getName().str() << "\n";
         }
         DiagnosticConsumer::HandleDiagnostic(DiagLevel, Info);
-        //Proxy->HandleDiagnostic(DiagLevel, Info);
+        Proxy->HandleDiagnostic(DiagLevel, Info);
     }
 };
 
