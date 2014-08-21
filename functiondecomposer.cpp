@@ -5,6 +5,8 @@
 #include "clang/Frontend/FrontendAction.h"
 #include "clang/Tooling/Tooling.h"
 #include "clang/Parse/ParseDiagnostic.h"
+#include "clang/Sema/SemaDiagnostic.h"
+#include "clang/Lex/Lexer.h"
 
 using namespace clang;
 
@@ -43,6 +45,27 @@ public:
             }
             llvm::outs() << "\n";
         }
+        if(VarDecl *varDecl = dyn_cast<VarDecl>(Declaration))
+        {
+            if(!dyn_cast<ParmVarDecl>(Declaration)) //parameter variables already output with functions above
+            {
+                llvm::outs() << "variable type: " << varDecl->getType().getAsString() << ", variable name: " << varDecl->getNameAsString();
+                if(varDecl->hasInit())
+                {
+                    const Expr* varInit = varDecl->getInit();
+                    if(varInit->isRValue())
+                    {
+                        SourceRange varSourceRange = varInit->getSourceRange();
+                        if(!varSourceRange.isValid())
+                            return true;
+                        CharSourceRange charSourceRange(varSourceRange, true);
+                        StringRef sourceText = Lexer::getSourceText(charSourceRange, Context->getSourceManager(), Context->getLangOpts(), 0);
+                        llvm::outs() << ", initialization value: " << sourceText.str();
+                    }
+                }
+                llvm::outs() << "\n";
+            }
+        }
         return true;
     }
 private:
@@ -71,9 +94,19 @@ struct FunctionDecomposerDiagnosticConsumer : clang::DiagnosticConsumer {
     void EndSourceFile() { Proxy->EndSourceFile(); }
     void finish() { Proxy->finish(); }
     void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel, const clang::Diagnostic& Info) {
-        if(DiagLevel == DiagnosticsEngine::Error && Info.getID() == clang::diag::err_unknown_typename && Info.getNumArgs() > 0)
+        if(DiagLevel == DiagnosticsEngine::Error)
         {
-            llvm::outs() << "Unknown type detected: " << Info.getArgIdentifier(0)->getName().str() << "\n";
+            const unsigned diagId = Info.getID();
+            const unsigned numDiagArgs = Info.getNumArgs();
+            if(numDiagArgs < 1) return;
+            if(diagId == clang::diag::err_unknown_typename)
+            {
+                llvm::outs() << "Unknown type detected: " << Info.getArgIdentifier(0)->getName().str() << "\n";
+            }
+            else if(diagId == clang::diag::err_unknown_typename_suggest && Info.getNumFixItHints() > 0)
+            {
+                llvm::outs() << "Unknown type (with suggestion) detected: " << Info.getArgIdentifier(0)->getName().str() << " (suggestion: " << Info.getFixItHint(0).CodeToInsert << ")\n";
+            }
         }
         DiagnosticConsumer::HandleDiagnostic(DiagLevel, Info);
         Proxy->HandleDiagnostic(DiagLevel, Info);
@@ -91,5 +124,5 @@ public:
 };
 
 int main(int argc, char **argv) {
-    clang::tooling::runToolOnCode(new FunctionDecomposerFrontendAction, ((argc > 1) ? argv[1] : "int main(int argc, char **argv);"));
+    clang::tooling::runToolOnCode(new FunctionDecomposerFrontendAction, ((argc > 1) ? argv[1] : "int someFunc(int x, char **y); bool b; int x = 0; int y(x); inz /*typo*/ hi = y;"));
 }
